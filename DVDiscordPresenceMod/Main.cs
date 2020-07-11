@@ -11,10 +11,12 @@ namespace DVDiscordPresenceMod
         public const string DETAILS_IDLE = "No Active Jobs";
         public const string STATE_IDLE = "Idle";
         public const string STATE_NO_CARGO = "No Cargo";
+        public const string STATE_POWER_MOVE = "Power Move";
         public static readonly DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public const string LARGE_ICON = "icon";
         public const float ACTIVITY_UPDATE_TIME = 1;
         public const float MAX_TIMER_DIFFERENCE = 10;
+        public const long SLACK_TIME = 60;
         // public const float RPC_UPDATE_TIME = 15; // RPC dll should handle rate limiting just fine.
 
         public static UnityModManager.ModEntry mod;
@@ -318,7 +320,7 @@ namespace DVDiscordPresenceMod
             {
                 long curTime = UnixTime();
                 long actualActivityStart = curTime - (long)currentJob.GetTimeOnJob();
-                activityEnd = actualActivityStart + (long)currentJob.TimeLimit;
+                activityEnd = actualActivityStart + (long)currentJob.TimeLimit + SLACK_TIME;
                 bool timesUp = activityEnd < curTime;
                 changed = changed || bonusOver != timesUp || Math.Abs(actualActivityStart - activityStart) > MAX_TIMER_DIFFERENCE;
                 activityStart = actualActivityStart;
@@ -371,7 +373,7 @@ namespace DVDiscordPresenceMod
                     else
                         activityDetails = jobTypeString;
                     activityStart = UnixTime() - (long)currentJob.GetTimeOnJob();
-                    activityEnd = activityStart + (long)currentJob.TimeLimit;
+                    activityEnd = activityStart + (long)currentJob.TimeLimit + SLACK_TIME;
                 }
             }
 
