@@ -1,6 +1,7 @@
 ﻿using DV.Logic.Job;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityModManagerNet;
 
 namespace DVDiscordPresenceMod
@@ -10,8 +11,7 @@ namespace DVDiscordPresenceMod
         public const string CLIENT_ID = "716722953340846172";
         public const string DETAILS_IDLE = "No Active Jobs";
         public const string STATE_IDLE = "Idle";
-        public const string STATE_NO_CARGO = "No Cargo";
-        public const string STATE_POWER_MOVE = "Power Move";
+        // public const string STATE_NO_CARGO = "No Cargo";
         public static readonly DateTime EPOCH = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         public const string LARGE_ICON = "icon";
         public const float ACTIVITY_UPDATE_TIME = 1;
@@ -213,6 +213,12 @@ namespace DVDiscordPresenceMod
                 lastTrain = train;
                 loco = PlayerManager.LastLoco;
             }
+            // Switch current train if player entered caboose.
+            else if (car != null && CarTypes.IsCaboose(car.carType))
+            {
+                lastTrain = train;
+                loco = car;
+            }
             // No changes if otherwise, and we need to check the last train itself.
             if (lastTrain == null)
                 return false;
@@ -221,6 +227,7 @@ namespace DVDiscordPresenceMod
             TrainCarType carType = TrainCarType.NotSet; // First found consist car type.
             CargoType cargo = CargoType.None; // First found cargo type.
             int consist = 0; // Number of cars in consist.
+            int caboose = 0; // Consist has caboose?
             bool derailed = false; // Any car derailed?
             bool mixed = false; // Mixed cargo types?
             float length = 0; // Length of consist, excluding locos.
@@ -231,8 +238,16 @@ namespace DVDiscordPresenceMod
                 derailed = derailed || c.derailed;
                 if (CarTypes.IsAnyLocomotiveOrTender(c.carType))
                 {
+                    if (loco == null || CarTypes.IsCaboose(loco.carType))
+                        loco = c;
+                }
+                else if (CarTypes.IsCaboose(c.carType))
+                {
                     if (loco == null)
                         loco = c;
+                    caboose++;
+                    length += c.logicCar.length;
+                    weight += c.logicCar.carOnlyMass;
                 }
                 else
                 {
@@ -246,7 +261,7 @@ namespace DVDiscordPresenceMod
                 }
             }
 
-            changed = lastCarsCount != lastTrain.cars.Count || lastLength != length || lastWeight != weight || wasDerailed != derailed;
+            changed = changed || lastCarsCount != lastTrain.cars.Count || lastLength != length || lastWeight != weight || wasDerailed != derailed;
             lastCarsCount = lastTrain.cars.Count;
             lastLength = length;
             lastWeight = weight;
@@ -258,10 +273,12 @@ namespace DVDiscordPresenceMod
                 {
                     switch (loco.carType)
                     {
+                        case TrainCarType.LocoShunter:
+                            smallImageKey = "locoshunteryellow";
+                            smallImageText = "DE2 Shunter";
+                            break;
                         case TrainCarType.LocoSteamHeavy:
-                        case TrainCarType.LocoSteamHeavyBlue:
                         case TrainCarType.Tender:
-                        case TrainCarType.TenderBlue:
                             smallImageKey = "locosteamgray";
                             smallImageText = "SH 2-8-2";
                             break;
@@ -269,9 +286,9 @@ namespace DVDiscordPresenceMod
                             smallImageKey = "locodiesel";
                             smallImageText = "DE6 Diesel";
                             break;
-                        case TrainCarType.LocoShunter:
-                            smallImageKey = "locoshunteryellow";
-                            smallImageText = "DE2 Shunter";
+                        case TrainCarType.CabooseRed:
+                            smallImageKey = "carcaboosered";
+                            smallImageText = "Caboose";
                             break;
                         default:
                             smallImageKey = "";
@@ -283,11 +300,12 @@ namespace DVDiscordPresenceMod
                 if (consist > 0)
                 {
                     string emptyCarType = GetEmptyCarName(carType, consist > 1);
-                    string cargoName = cargo == CargoType.None ? emptyCarType : string.Format("{0}{1}", cargo.GetCargoName(), mixed ? ", etc." : "");
+                    string cabooseState = caboose > 0 ? string.Format(", Caboose{0}", caboose > 1 ? "s" : "") : "";
+                    string cargoName = cargo == CargoType.None ? string.Format("{0}{1}", emptyCarType, cabooseState) : string.Format("{0}{1}{2}", cargo.GetCargoName(), cabooseState, mixed ? ", etc." : "");
                     activityState = string.Format("{0}: {1:0.00} tons; {2:0.00} meters{3}", cargoName, weight / 1000f, length, derailed ? "; derailed" : "");
                 }
-                else
-                    activityState = derailed ? "Derailed" : STATE_NO_CARGO;
+                else // activityState = derailed ? "Derailed" : STATE_NO_CARGO;
+                    activityState = string.Format("{0}{1}", "No Cargo", derailed ? "; derailed" : "");
             }
 
             return changed;
@@ -338,7 +356,6 @@ namespace DVDiscordPresenceMod
                 }
                 else
                 {
-                    
                     StationInfo srcStation = ExtractStationInfoWithYardID(currentJob.chainData.chainOriginYardId);
                     StationInfo stationInfo = ExtractStationInfoWithYardID(currentJob.chainData.chainDestinationYardId);
                     string jobTypeString;
@@ -361,6 +378,10 @@ namespace DVDiscordPresenceMod
                         case JobType.EmptyHaul:
                             jobTypeString = "Logistical Haul";
                             preposition = "to";
+                            // Power Move Jobs Integration
+                            EmptyHaulJobData jobData = JobDataExtractor.ExtractEmptyHaulJobData(currentJob);
+                            if (jobData.transportingCars.All(c => CarTypes.IsAnyLocomotiveOrTender(TrainCar.logicCarToTrainCar[c].carType)))
+                                jobTypeString = "Power Move";
                             break;
                         default:
                             stationInfo = srcStation;

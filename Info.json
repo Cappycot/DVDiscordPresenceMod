@@ -1,0 +1,9 @@
+{
+    "Id": "DVDiscordPresenceMod",
+    "DisplayName": "Discord Rich Presence",
+    "Author": "Cappycot",
+    "Version": "1.1.0",
+    "EntryMethod": "DVDiscordPresenceMod.Main.Load",
+    "HomePage": "https://www.nexusmods.com/derailvalley/mods/128",
+    "Repository": "https://raw.githubusercontent.com/Cappycot/DVDiscordPresenceMod/master/Repository.json"
+}
